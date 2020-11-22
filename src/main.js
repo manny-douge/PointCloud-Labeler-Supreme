@@ -1,50 +1,21 @@
 import * as THREE from '../lib/three.module.js';
-import { OrbitControls } from "https://threejs.org/examples/jsm/controls/OrbitControls.js";
-import Stats from "https://threejs.org/examples/jsm/libs/stats.module.js";
-import * from './init.module.js';
+import * as INIT from './init.module.js';
+import * as PC_GUI from './pc_gui.module.js';
+
+
 // Set global three state for SCENE
 const SCENE = new THREE.Scene();
 SCENE.background = new THREE.Color( 0xc0c0c0 );
 
-// Setup Persp Camera, arguments are FOV, aspect ratio, near clip, far clip
-const CAMERA = new THREE.PerspectiveCamera( 75, window.innerWidth/
-                                    window.innerHeight, 1, 1000 )
-//CAMERA.position.set( 1000, 50, 1500);
-CAMERA.position.z = 5;
+const CAMERA = INIT.CAMERA;
+const RENDERER = INIT.RENDERER;
+const CONTROLS = INIT.CONTROLS;
+const STATS = INIT.STATS;
+const GUI = PC_GUI.GUI; 
 
-//Initialize renderer no fallback or warning yet TODO: ADD FALLBACK
-const RENDERER = new THREE.WebGLRenderer( {antialias: true});
 
-// Size to render our app at,
-// Smaller sizes = lower resolution = better performance
-RENDERER.setSize( window.innerWidth, window.innerHeight );
-
-//Set up controllers for dragging and panning 
-const CONTROLS = new OrbitControls( CAMERA, RENDERER.domElement );
-CONTROLS.maxPolarAngle = Math.PI * 0.5;
-CONTROLS.minDistance = 1;
-CONTROLS.maxDistance = 5000;
-
-//Append render to the index body 
-document.body.appendChild( RENDERER.domElement );
-
-const STATS = new Stats();
-document.body.appendChild( STATS.dom );
-
-function import_json() {
-    alert("Ello gubna!");
-}
-
-//SET UP GUI
-const gui = new dat.GUI();
-let parameters = {
-    import_param: import_json,
-};
-
-gui.add( parameters, 'import_param' ).name("Import JSON");
-
-//GUI.add(
 //START LABELER PROTOTYPING  =================================
+
 let light = new THREE.PointLight( 0xfffffff );
 light.position.set( 0, 250, 0 );
 SCENE.add( light );
