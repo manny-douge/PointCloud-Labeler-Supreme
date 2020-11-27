@@ -17,7 +17,7 @@ let DATA_WAS_LOADED = false;
 let pointcloud_data = null; 
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
-let intersects, intersected_pt_index;
+let intersects, intersected_pt_index, intersected_pts = [];
 let points;
 let selection_box = new SelectionBox( CAMERA, SCENE );
 let helper = new SelectionHelper( selection_box, RENDERER, 'selectBox' );
@@ -186,6 +186,44 @@ function data_did_load() {
 	DATA_WAS_LOADED = true;
 }
 
+function change_point_size( points_to_update, size ) {
+    let size_attr = points.geometry.getAttribute( 'size' );
+
+    var points_intersected = [].concat( points_to_update || [] );
+    for( let i = 0; i < points_intersected.length; i++ ) {
+        let pt_index = points_intersected[i];
+
+        //Update size for point 
+        size_attr.array[ pt_index ] = size;
+    }
+
+    //Tell GSLS shader to update colors on next render 
+    size_attr.needsUpdate = true;	
+}
+
+function change_point_color( points_to_update, color ) {
+    let color_attr = points.geometry.getAttribute( 'customColor' );
+
+    var points_intersected = [].concat( points_to_update || [] );
+    for( let i = 0; i < points_intersected.length; i++ ) {
+        let pt_index = points_intersected[i];
+
+        let colorIdx = pt_index * 3;
+        
+        //Set red value for point
+        color_attr.array[ colorIdx ] = color.r;
+
+        //Set green value for point
+        color_attr.array[ colorIdx + 1 ] = color.g;
+
+        //Set blue value for point
+        color_attr.array[ colorIdx + 2 ] = color.b; 
+    }
+
+    //Tell GSLS shader to update colors on next render 
+    color_attr.needsUpdate = true;	
+}
+
 function update() {
 	//Not time to update yet....
 	if(DATA_WAS_LOADED == false) {
@@ -196,53 +234,42 @@ function update() {
     raycaster.setFromCamera( mouse, CAMERA );
     intersects = raycaster.intersectObject( points );
 
-    let pt_geometry = points.geometry;
-	let size_attr = points.geometry.getAttribute( 'size' );
-	let color_attr = points.geometry.getAttribute( 'customColor' );
-
 	//Check if hit something 
     if( intersects.length > 0 ) {
         if ( intersected_pt_index != intersects[0].index ) {
-			//Set point to it's original point size             
-            size_attr.array[intersected_pt_index] = DEFAULT_POINT_SIZE;
-
-			//Get index of point in pointcloud that raycast hit 
-			intersected_pt_index = intersects[0].index;
-
-			//Expand point hit by raycast  
-            size_attr.array[intersected_pt_index] = DEFAULT_POINT_SIZE * LABELED_POINT_MUL;
-
-			//Tell GSLS shader to update colors on next render 
-			size_attr.needsUpdate = true;
-
+			console.log( `Raycast hit ${intersects.length}` );
+            if( intersected_pts.length > 0) {
+                //unhighlight old points 
+                change_point_color( intersected_pts, DEFAULT_POINT_COLOR ); 
+                change_point_size( intersected_pts, DEFAULT_POINT_SIZE ); 
+                intersected_pts = [];
+            }
+            
+            //Add new intersected pts to array so we can highlight them
+            //later 
+            intersects.map( pt => intersected_pts.push( pt.index ) ); 
+            
+            let new_size = DEFAULT_POINT_SIZE * LABELED_POINT_MUL; 
+            change_point_size( intersected_pts, new_size ); 
 
 			//Color Idx * 3 is the actual index of the point in the 
 			//pointcloud, this is because the color is stored as
 			//r0,g0,b0,r1,g1,b1,...rn,gn,bn.
 			//x0,y0,z0,x1,y1,z1,...xn,yn,zn.
 			//So point i's red value will be stored in color_buffer[i * 3]
-			let colorIdx = intersected_pt_index * 3;
-			
-			//Set red value for point
-            color_attr.array[ colorIdx ] = LABELED_POINT_COLOR.r;
-
-			//Set green value for point
-            color_attr.array[ colorIdx + 1 ] = LABELED_POINT_COLOR.g;
-
-			//Set blue value for point
-            color_attr.array[ colorIdx + 2 ] = LABELED_POINT_COLOR.b; 
-
-			//Tell GSLS shader to update colors on next render 
-			color_attr.needsUpdate = true;	
+            change_point_color( intersected_pts, LABELED_POINT_COLOR );
         }
-    } else if ( intersected_pt_index !== null ) {
-		//If we didnt hit anything set the last point hit back to normal
-        size_attr.array[intersected_pt_index] = DEFAULT_POINT_SIZE;
-		size_attr.needsUpdate = true;
+    } else if ( intersected_pt_index !== null && intersected_pts.length > 0 )  {
 
-		//TODO: Set default color back to normal here 
-		//color_attr.needsUpdate = true;	
-        intersected_pt_index = null;
+        //If we didnt hit anything set last point size & color
+        //back to defualt  
+        change_point_size( intersected_pts, DEFAULT_POINT_SIZE );
+
+        //Set color attribuets back to normal
+        change_point_color( intersected_pts, DEFAULT_POINT_COLOR );
+
+        //intersected_pt_index = null;
+        intersected_pts = [];
     }
 }
 
