@@ -11,6 +11,7 @@ const CAMERA = new THREE.PerspectiveCamera( 75, window.innerWidth/
                                       window.innerHeight, 1, 1000 )
 //CAMERA.position.set( 1000, 50, 1500);
 CAMERA.position.z = 5;
+CAMERA.aspect = window.innerWidth / window.innerHeight;
 
 //Initialize renderer no fallback or warning yet TODO: ADD FALLBACK
 const RENDERER = new THREE.WebGLRenderer( {antialias: true});

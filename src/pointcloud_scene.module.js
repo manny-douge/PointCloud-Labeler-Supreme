@@ -1,25 +1,34 @@
 import * as THREE from '../lib/three.module.js';
-import { SelectionBox } from '../lib/SelectionBox.js';
-import { SelectionHelper } from '../lib/SelectionHelper.js';
+import { SelectionHelper } from '../src/SelectionHelper.js';
 import * as INIT from './init.module.js';
 import * as DataImporter from './data_importer.module.js';
+import * as PC_GUI from './pc_gui.module.js';
 
 const SCENE = INIT.SCENE;
 const RENDERER = INIT.RENDERER;
 const CAMERA = INIT.CAMERA;
+const GUI = PC_GUI.GUI; 
+const CONTROLS = INIT.CONTROLS;
 
 const DEFAULT_POINT_SIZE = 0.02;
 const LABELED_POINT_MUL = 3;
 const DEFAULT_POINT_COLOR = new THREE.Color( 0x778899 );
 const LABELED_POINT_COLOR = new THREE.Color( 0xFF0000 );
 
+const SCENE_STATE = Object.assign( { 
+    DEFAULT: "DEFAULT",
+    LABELING: "LABELING",    //Orbit controls disasbled in labeling state 
+} );
+
+let IS_LABELING = false;
+let CURRENT_STATE = SCENE_STATE.DEFAULT;
 let DATA_WAS_LOADED = false;
 let pointcloud_data = null; 
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let intersects, intersected_pt_index, intersected_pts = [];
 let points;
-let selection_box = new SelectionBox( CAMERA, SCENE );
+let selection_box =  { startPoint: new THREE.Vector2(), endPoint: new THREE.Vector2()  }
 let helper = new SelectionHelper( selection_box, RENDERER, 'selectBox' );
 
 function init() {
@@ -33,18 +42,32 @@ function init() {
     light.position.set( 0, 250, 0 );
     SCENE.add( light );
 
-    window.addEventListener( 'mousemove', onDocumentMouseMove, false );
-    document.addEventListener( 'pointerdown', onBoundingBoxStart, false );
-    document.addEventListener( 'pointermove', onBoundingBoxMove, false );
-    document.addEventListener( 'pointerup', onBoundingBoxStop, false );
+    window.addEventListener( 'pointermove', onDocumentMouseMove, false );
+    document.addEventListener( 'pointerdown', onBoundingBoxStart, true);
+    document.addEventListener( 'pointermove', onBoundingBoxMove );
+    document.addEventListener( 'pointerup', onBoundingBoxStop );
+    document.addEventListener( 'keydown', onKeyDown);
 }
 
-function onBoundingBoxStart() {
-	console.log( "Bounding box start" );
-	for ( const item of selection_box.collection ) {
-		item.material.emissive.set( 0x000000 );
+function onKeyDown( event ) {
+    //console.log( `Key: ${event.code}` );
+    if( event.code == "Space" ) {
+        //If they press space, toggle between label and view mode
+        IS_LABELING = !( IS_LABELING );
+        PC_GUI.change_mode(IS_LABELING);
 
-	}
+        //In labeling mode, disable camera controls
+        CONTROLS.enabled = !( IS_LABELING ); 
+
+        //In labeling mode, enable selectionhelper 
+        helper.enabled = IS_LABELING; 
+    }
+}
+function onBoundingBoxStart( event ) {
+	//console.log( `BB start: ${selection_box.collection.length}` );
+	//for ( const item of selection_box.collection ) {
+	//	item.material.emissive.set( 0x000000 );
+	//}
 
 	selection_box.startPoint.set(
 		( event.clientX / window.innerWidth ) * 2 - 1,
@@ -52,48 +75,55 @@ function onBoundingBoxStart() {
 		0.5 );
 }
 
-function onBoundingBoxMove() {
-
+function onBoundingBoxMove( event ) {
+	//console.log( `BB move: ${selection_box.collection.length}` );
 	if( helper.isDown ) {
-		for ( let i = 0; i < selection_box.collection.length; i ++ ) {
-			selection_box.collection[ i ].material.emissive.set( 0x000000 );
-		}
+		//for ( let i = 0; i < selection_box.collection.length; i ++ ) {
+		//	selection_box.collection[ i ].material.emissive.set( 0x000000 );
+		//}
 
 		selection_box.endPoint.set(
 			( event.clientX / window.innerWidth ) * 2 - 1,
 			- ( event.clientY / window.innerHeight ) * 2 + 1,
 			0.5 );
 
-		const allSelected = selection_box.select();
-		
-		console.log( `Points in SelectionBox ${allSelected.length}` );
-		for ( let i = 0; i < allSelected.length; i ++ ) {
-			allSelected[ i ].material.emissive.set( 0xffffff );
-		}
+		//const allSelected = selection_box.select();
+		//
+		//for ( let i = 0; i < allSelected.length; i ++ ) {
+		//	allSelected[ i ].material.emissive.set( 0xffffff );
+		//}
 	}
 }
 
-function onBoundingBoxStop() {
-	console.log( "Bounding box stop" );
+function onBoundingBoxStop( event ) {
 	selection_box.endPoint.set(
 		( event.clientX / window.innerWidth ) * 2 - 1,
 		- ( event.clientY / window.innerHeight ) * 2 + 1,
 		0.5 );
+    
+    
+    
+    //const helper_start = helper.scene_start_point;
+    //const helper_end = helper.scene_end_point;
+	//const allSelected = selection_box.select();
+	//console.log( `BB stop: ${ allSelected.length }` );
+	console.log( `BB stop: 
+                st_point: ${ JSON.stringify( selection_box.startPoint ) } 
+                st_point_helper: ${ JSON.stringify( helper.scene_start_point ) } 
+                end_point: ${ JSON.stringify( selection_box.endPoint) } 
+                end_point_helper: ${ JSON.stringify( helper.scene_end_point ) }` );
 
-	const allSelected = selection_box.select();
-	console.log( `BoundingBoxStop: Points SelectionBox ${allSelected.length}` );
+	//for ( let i = 0; i < allSelected.length; i ++ ) {
 
-	for ( let i = 0; i < allSelected.length; i ++ ) {
-
-		allSelected[ i ].material.emissive.set( 0xffffff );
-	}
+	//	allSelected[ i ].material.emissive.set( 0xffffff );
+	//}
 }
 
 function onDocumentMouseMove( event ) {
-    event.preventDefault();
+    //event.preventDefault();
 
-    mouse.x = ( event.clientX/ window.innerWidth ) * 2 - 1;
-    mouse.y = - ( event.clientY/ window.innerHeight) * 2 + 1;
+    //mouse.x = ( event.clientX/ window.innerWidth ) * 2 - 1;
+    //mouse.y = - ( event.clientY/ window.innerHeight) * 2 + 1;
 	//console.log( `MX: ${mouse.x} MY: ${mouse.y}` );
 }
 
@@ -166,6 +196,7 @@ function render_pointcloud() {
 		vertexShader: document.getElementById( 'vertexshader' ).textContent,
 		fragmentShader: document.getElementById( 'fragmentshader' ).textContent,
 		transparent: true,
+        alphaTest: 0.05,
 	} );
 
 	//Create pointcloud from explicit geometry and material
@@ -177,11 +208,17 @@ function render_pointcloud() {
 }
 
 function data_did_load() {
+    //Abstract call here to pub sub model for other modules as well
+    //No reason pcl_scene should be talking directly to GUI
+    //update gui with file info 
+    PC_GUI.parameters.File = DataImporter.pc_metadata.filename;
+
     //Grab data from data importer 
     pointcloud_data = DataImporter.pc_data;    
 
     render_pointcloud(); 
 	
+    //selection_box = new SelectionBox( CAMERA, points );
 	//begin update
 	DATA_WAS_LOADED = true;
 }
@@ -229,7 +266,6 @@ function update() {
 	if(DATA_WAS_LOADED == false) {
 		return;
 	}
-    console.log( "PointCloud Scene Update" );
 
     raycaster.setFromCamera( mouse, CAMERA );
     intersects = raycaster.intersectObject( points );
@@ -237,7 +273,7 @@ function update() {
 	//Check if hit something 
     if( intersects.length > 0 ) {
         if ( intersected_pt_index != intersects[0].index ) {
-			console.log( `Raycast hit ${intersects.length}` );
+			//console.log( `Raycast hit ${intersects.length}` );
             if( intersected_pts.length > 0) {
                 //unhighlight old points 
                 change_point_color( intersected_pts, DEFAULT_POINT_COLOR ); 

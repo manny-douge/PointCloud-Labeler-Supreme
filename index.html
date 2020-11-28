@@ -4,7 +4,10 @@
 		<meta charset="utf-8">
 		<title>PointCloud Labeler Supreme</title>
 		<style>
-			body { margin: 0; }
+			body { 
+                margin: 0;
+                background-color: black;
+             }
 			canvas { display: block; }
 			.selectBox {
 				border: 1px solid #55aaff;
@@ -47,7 +50,7 @@
 
 				gl_FragColor = gl_FragColor * texture2D( pointTexture, gl_PointCoord );
 
-				//if ( gl_FragColor.a < ALPHATEST ) discard;
+				if ( gl_FragColor.a < ALPHATEST ) discard;
 
 			}
 
