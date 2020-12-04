@@ -16,12 +16,14 @@ const DEFAULT_POINT_COLOR = new THREE.Color( 0x778899 );
 const LABELED_POINT_COLOR = new THREE.Color( 0xFF0000 );
 
 const SCENE_STATE = Object.assign( { 
-    DEFAULT: "DEFAULT",
+    VIEWING: "VIEWING",
     LABELING: "LABELING",    //Orbit controls disasbled in labeling state 
 } );
 
 let IS_LABELING = false;
-let CURRENT_STATE = SCENE_STATE.DEFAULT;
+
+//TODO: CHOOSE ONE STATE VAR OR BOOLEAN FOR STATE
+let CURRENT_STATE = SCENE_STATE.VIEWING;
 let DATA_WAS_LOADED = false;
 let pointcloud_data = null; 
 let raycaster = new THREE.Raycaster();
@@ -61,6 +63,7 @@ function onKeyDown( event ) {
 
         //In labeling mode, enable selectionhelper 
         helper.enabled = IS_LABELING; 
+
     }
 }
 function onBoundingBoxStart( event ) {
@@ -96,34 +99,20 @@ function onBoundingBoxMove( event ) {
 }
 
 function onBoundingBoxStop( event ) {
-	selection_box.endPoint.set(
-		( event.clientX / window.innerWidth ) * 2 - 1,
-		- ( event.clientY / window.innerHeight ) * 2 + 1,
-		0.5 );
-    
-    
-    
-    //const helper_start = helper.scene_start_point;
-    //const helper_end = helper.scene_end_point;
-	//const allSelected = selection_box.select();
-	//console.log( `BB stop: ${ allSelected.length }` );
-	console.log( `BB stop: 
-                st_point: ${ JSON.stringify( selection_box.startPoint ) } 
+
+    if( IS_LABELING ) {
+        console.log( `BB stop: 
                 st_point_helper: ${ JSON.stringify( helper.scene_start_point ) } 
-                end_point: ${ JSON.stringify( selection_box.endPoint) } 
                 end_point_helper: ${ JSON.stringify( helper.scene_end_point ) }` );
-
-	//for ( let i = 0; i < allSelected.length; i ++ ) {
-
-	//	allSelected[ i ].material.emissive.set( 0xffffff );
-	//}
+        raycast_bounding_box(); 
+    }
 }
 
 function onDocumentMouseMove( event ) {
-    //event.preventDefault();
+    event.preventDefault();
 
-    //mouse.x = ( event.clientX/ window.innerWidth ) * 2 - 1;
-    //mouse.y = - ( event.clientY/ window.innerHeight) * 2 + 1;
+    mouse.x = ( event.clientX/ window.innerWidth ) * 2 - 1;
+    mouse.y = - ( event.clientY/ window.innerHeight) * 2 + 1;
 	//console.log( `MX: ${mouse.x} MY: ${mouse.y}` );
 }
 
@@ -261,12 +250,77 @@ function change_point_color( points_to_update, color ) {
     color_attr.needsUpdate = true;	
 }
 
-function update() {
-	//Not time to update yet....
-	if(DATA_WAS_LOADED == false) {
-		return;
-	}
+function raycast_bounding_box() {
+    console.log( `Shooting bounding box rays` );
+    
+	//just for bounding box, we want to catch all the points
+    //we can, so set a big threshold for the mean time
+	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE * 2;
 
+    //Get bounding box dimensions from helper
+    let bb_start_pt = helper.scene_start_point;
+    let bb_end_pt   = helper.scene_end_point;
+    console.log( `Before correction: s_x:${ bb_start_pt.x} s_y: ${bb_start_pt.y}
+                    e_x:${ bb_end_pt.x} e_y: ${bb_end_pt.y}` );
+    //Before we can run the for loop shooting rays in the bounding box
+    //we need to correct the bounding box based on where the start
+    //points begin and end points end. depending on how someone
+    //makes a bounding box you can end up in any of the four quadrants
+    //of a coordinate system, the next code segment corrects this
+    //so we can use 1 for loop for all 4 quadrants
+
+    //Set up some point copies in advance 
+    let temp_start = Object.assign( bb_start_pt );
+    let temp_end   = Object.assign( bb_end_pt );
+
+    // handles 2nd quadrant
+    if( bb_end_pt.x < bb_start_pt.x && bb_end_pt.y < bb_start_pt.y) { 
+        bb_start_pt = new THREE.Vector2( bb_end_pt.x, bb_end_pt.y );
+        bb_end_pt   = new THREE.Vector2( temp_start.x, temp_start.y );
+    } else if( bb_end_pt.x < bb_start_pt.x ) { // handles 3rd quadrant
+        bb_start_pt = new THREE.Vector2( bb_end_pt.x, bb_start_pt.y );
+        bb_end_pt   = new THREE.Vector2( temp_start.x, bb_end_pt.y );
+    } else if( bb_end_pt.y < bb_start_pt.y) { //Handles 4th quadrant
+        bb_start_pt = new THREE.Vector2( bb_start_pt.x, bb_end_pt.y );
+        bb_end_pt   = new THREE.Vector2( bb_end_pt.x, temp_start.y );
+    } 
+    //console.log( `after correction: s_x:${ bb_start_pt.x} s_y: ${bb_start_pt.y}
+     //               e_x:${ bb_end_pt.x} e_y: ${bb_end_pt.y}` );
+    //array of indexes of the points hit for now
+    let points_hit = []
+    
+    //let start_x = bb_start_pt.x;
+    let end_x   = bb_end_pt.x;
+    let end_y   = bb_end_pt.y;
+    let smp_rate = DEFAULT_POINT_SIZE; 
+    //iterate over subset of bounding boxes and shoot rays
+    for( let start_y = bb_start_pt.y; start_y < end_y; start_y += smp_rate) {
+        for( let start_x = bb_start_pt.x; start_x < end_x; start_x += smp_rate) {
+            console.log( `start_x: ${start_x} start_y:${start_y}` );
+            //shoot rays from current point
+            let curr_pt = new THREE.Vector2( start_x, start_y );
+            raycaster.setFromCamera( curr_pt, CAMERA );
+            let intersects = raycaster.intersectObject( points );
+
+            //Add new intersected pts to array so we can highlight them
+            //later 
+            intersects.map( pt => points_hit.push( pt.index ) ); 
+        }        
+    }
+    
+    //highlight all points hit 
+    change_point_color( points_hit, LABELED_POINT_COLOR );
+
+    //enlarge all points hit 
+    change_point_size( points_hit, DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+
+    //set raycaster threshold back to normal
+	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE;
+
+    console.log( `Done box ray cast, points_hit length: ${points_hit.length}` );
+}
+
+function highlight_points_under_mouse() {
     raycaster.setFromCamera( mouse, CAMERA );
     intersects = raycaster.intersectObject( points );
 
@@ -307,6 +361,16 @@ function update() {
         //intersected_pt_index = null;
         intersected_pts = [];
     }
+}
+
+function update() {
+    //Dont update if data hasnt loaded yet
+    //or is in the middle labeling
+	if(DATA_WAS_LOADED == false ) {
+		return;
+	}
+    
+    highlight_points_under_mouse();
 }
 
 export { init, update, data_did_load };
