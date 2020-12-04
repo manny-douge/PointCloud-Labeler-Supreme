@@ -18,10 +18,10 @@ function import_data() {
 
 function clean() {
     //Strip intensity and ring from data 
-    strip_intensity_and_ring();
+    //strip_intensity_and_ring();
     
     //Flatten from list or (x, 3) matrix to (x, 1)
-    pc_data = pc_data.flat();
+    //pc_data = pc_data.flat();
 
 }
 
@@ -44,7 +44,8 @@ function load_file() {
         fileReader.addEventListener( 'load', (event) => { 
             //TODO: Add error handling if data can't be read
             //Once data is read as text, parse it into JSON 
-            pc_data = JSON.parse( event.target.result )[0];
+            //pc_data = JSON.parse( event.target.result )[0];
+            pc_data = JSON.parse( event.target.result );
             
             pc_metadata = {
                 filename: file.name,
@@ -56,7 +57,7 @@ function load_file() {
             clean();
 
             //Print for good measure, 
-            console.log( JSON.stringify( pc_data ) );
+            //console.log( JSON.stringify( pc_data ) );
 
             //Tell PointCloudScene that data is ready PogU !!!
             PointCloudScene.data_did_load(); 
@@ -66,7 +67,11 @@ function load_file() {
     }
 }
 
+function export_data() {
+    console.log( `Should export data` );
+}
+
 //Dynamically link onchange attribute to module function
 open_file_button.onchange = load_file; 
 
-export { import_data, pc_data, pc_metadata };
+export { import_data, export_data, pc_data, pc_metadata };

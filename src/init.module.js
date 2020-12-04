@@ -19,6 +19,9 @@ const RENDERER = new THREE.WebGLRenderer( {antialias: true});
 // Smaller sizes = lower resolution = better performance
 RENDERER.setSize( window.innerWidth, window.innerHeight );
 
+//Set id so we can add specific events for it later
+RENDERER.domElement.id = "RENDERER";
+
 //Append render to the index body
 document.body.appendChild( RENDERER.domElement );
 
@@ -37,8 +40,15 @@ CONTROLS.panSpeed = 0.8;
 
 
 //Displays stats, FPS, etc...
-const STATS = new Stats();
-document.body.appendChild( STATS.dom );
+const STATS_FPS = new Stats();
+STATS_FPS.domElement.style.cssText = "position:absolute;top:45px;left:3px;";
+document.body.appendChild( STATS_FPS.dom );
+
+//Display memory
+const STATS_MEMORY = new Stats();
+STATS_MEMORY.domElement.style.cssText = "position:absolute;top:45px;left:84px;";
+STATS_MEMORY.showPanel(2);
+document.body.appendChild( STATS_MEMORY.dom );
 
 
-export { SCENE, CONTROLS, CAMERA, RENDERER, STATS };
+export { SCENE, CONTROLS, CAMERA, RENDERER, STATS_FPS, STATS_MEMORY };

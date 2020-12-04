@@ -1,7 +1,7 @@
 import * as THREE from '../lib/three.module.js';
 import { SelectionHelper } from '../src/SelectionHelper.js';
 import * as INIT from './init.module.js';
-import * as DataImporter from './data_importer.module.js';
+import * as DataManager from './data_manager.module.js';
 import * as PC_GUI from './pc_gui.module.js';
 
 const SCENE = INIT.SCENE;
@@ -12,8 +12,9 @@ const CONTROLS = INIT.CONTROLS;
 
 const DEFAULT_POINT_SIZE = 0.02;
 const LABELED_POINT_MUL = 3;
-const DEFAULT_POINT_COLOR = new THREE.Color( 0x778899 );
-const LABELED_POINT_COLOR = new THREE.Color( 0xFF0000 );
+const DEFAULT_POINT_COLOR = new THREE.Color( 0x778899 );   //GRAY
+const LABELED_POINT_COLOR = new THREE.Color( 0xFF0000 );  //ORANGE
+const SELECTED_POINT_COLOR = new THREE.Color( 0xDFA602 ); //RED
 
 const SCENE_STATE = Object.assign( { 
     VIEWING: "VIEWING",
@@ -25,13 +26,17 @@ let IS_LABELING = false;
 //TODO: CHOOSE ONE STATE VAR OR BOOLEAN FOR STATE
 let CURRENT_STATE = SCENE_STATE.VIEWING;
 let DATA_WAS_LOADED = false;
+let current_row = 0;
 let pointcloud_data = null; 
+let labeled_points = [];
+let current_selected_points = [];
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let intersects, intersected_pt_index, intersected_pts = [];
 let points;
 let selection_box =  { startPoint: new THREE.Vector2(), endPoint: new THREE.Vector2()  }
 let helper = new SelectionHelper( selection_box, RENDERER, 'selectBox' );
+let animation_interval = null;
 
 function init() {
     console.log( "Init PCL Scene" );
@@ -44,15 +49,15 @@ function init() {
     light.position.set( 0, 250, 0 );
     SCENE.add( light );
 
-    window.addEventListener( 'pointermove', onDocumentMouseMove, false );
-    document.addEventListener( 'pointerdown', onBoundingBoxStart, true);
-    document.addEventListener( 'pointermove', onBoundingBoxMove );
-    document.addEventListener( 'pointerup', onBoundingBoxStop );
+    let canvas = document.getElementById( "RENDERER" );
+    canvas.addEventListener( 'pointermove', onDocumentMouseMove, false );
+    canvas.addEventListener( 'pointermove', onBoundingBoxMove );
+    canvas.addEventListener( 'pointerup', onBoundingBoxStop );
     document.addEventListener( 'keydown', onKeyDown);
 }
 
 function onKeyDown( event ) {
-    //console.log( `Key: ${event.code}` );
+    //console.log( `Key: ${event.code}` );;
     if( event.code == "Space" ) {
         //If they press space, toggle between label and view mode
         IS_LABELING = !( IS_LABELING );
@@ -65,17 +70,6 @@ function onKeyDown( event ) {
         helper.enabled = IS_LABELING; 
 
     }
-}
-function onBoundingBoxStart( event ) {
-	//console.log( `BB start: ${selection_box.collection.length}` );
-	//for ( const item of selection_box.collection ) {
-	//	item.material.emissive.set( 0x000000 );
-	//}
-
-	selection_box.startPoint.set(
-		( event.clientX / window.innerWidth ) * 2 - 1,
-		- ( event.clientY / window.innerHeight ) * 2 + 1,
-		0.5 );
 }
 
 function onBoundingBoxMove( event ) {
@@ -196,14 +190,73 @@ function render_pointcloud() {
     SCENE.add( new THREE.AxesHelper( 20 ) );
 }
 
+function play_animation() {
+    animation_interval = setInterval( function() {
+        forward();
+    }, 100);
+}
+
+function forward() {
+    //Delete old pointcloud 
+    SCENE.remove( points );
+    
+    //Move to next row of data set technically next pointcloud
+    current_row = (current_row + 1) % DataManager.pc_data.length;
+
+    //Set new row to current pointcloud data 
+    pointcloud_data = DataManager.pc_data[current_row];
+
+    render_pointcloud();
+
+    //highlight labeled points 
+    change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
+    change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+    //Update row GUI YIKES!
+    //TODO: Definitely gotta do some major decoupling here 
+    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.pc_data.length}`; 
+}
+
+function backward() {
+    //Delete old pointcloud 
+    SCENE.remove( points );
+    
+    //Move to next row of data set technically next pointcloud
+    current_row = (current_row == 0) ? current_row : current_row - 1;
+
+    //Set new row to current pointcloud data 
+    pointcloud_data = DataManager.pc_data[current_row];
+
+    render_pointcloud();
+
+    //highlight labeled points 
+    change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
+    change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+
+    //Update row GUI YIKES!
+    //TODO: Definitely gotta do some major decoupling here 
+    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.pc_data.length}`; 
+}
+
+function stop_animation() {
+    if(animation_interval) {
+        clearInterval(animation_interval);
+    }
+    animation_interval = null;
+}
+
 function data_did_load() {
     //Abstract call here to pub sub model for other modules as well
     //No reason pcl_scene should be talking directly to GUI
     //update gui with file info 
-    PC_GUI.parameters.File = DataImporter.pc_metadata.filename;
+    PC_GUI.parameters.File = DataManager.pc_metadata.filename;
+    PC_GUI.parameters.Rows = `0 of ${DataManager.pc_data.length}`; 
 
     //Grab data from data importer 
-    pointcloud_data = DataImporter.pc_data;    
+    pointcloud_data = DataManager.pc_data[current_row];    
+
+    //make labeled point bins
+    labeled_points = []
+    pointcloud_data.map( row => labeled_points.push([]) );
 
     render_pointcloud(); 
 	
@@ -250,6 +303,44 @@ function change_point_color( points_to_update, color ) {
     color_attr.needsUpdate = true;	
 }
 
+function get_point_indices() {
+    //create list of indices for all points 
+    let pointcloud_data_indices = [];
+    for(let i = 0; i < pointcloud_data.length; i++) {
+        pointcloud_data_indices.push( i );
+    }
+     
+    return pointcloud_data_indices;
+}
+
+function label_selected() {
+    let labeled_copy = [];
+    //make deep copy of currently selected 
+    current_selected_points.map( idx => labeled_copy.push( idx ) );
+    labeled_points[current_row] = labeled_copy;
+
+    change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
+    change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+
+    //reset current selection 
+    current_selected_points = [];
+}
+
+function clear_all() {
+    labeled_points[current_row] = [];
+    let all_indices = get_point_indices();
+    change_point_color( all_indices, DEFAULT_POINT_COLOR );
+    change_point_size( all_indices, DEFAULT_POINT_SIZE );
+    current_selected_points = [];
+}
+
+function clear_selected() {
+    let selected_indices = current_selected_points;
+    change_point_color( selected_indices, DEFAULT_POINT_COLOR );
+    change_point_size( selected_indices, DEFAULT_POINT_SIZE );
+    current_selected_points= [];
+}
+
 function raycast_bounding_box() {
     console.log( `Shooting bounding box rays` );
     
@@ -287,7 +378,7 @@ function raycast_bounding_box() {
     //console.log( `after correction: s_x:${ bb_start_pt.x} s_y: ${bb_start_pt.y}
      //               e_x:${ bb_end_pt.x} e_y: ${bb_end_pt.y}` );
     //array of indexes of the points hit for now
-    let points_hit = []
+    //current_selected_points 
     
     //let start_x = bb_start_pt.x;
     let end_x   = bb_end_pt.x;
@@ -296,7 +387,7 @@ function raycast_bounding_box() {
     //iterate over subset of bounding boxes and shoot rays
     for( let start_y = bb_start_pt.y; start_y < end_y; start_y += smp_rate) {
         for( let start_x = bb_start_pt.x; start_x < end_x; start_x += smp_rate) {
-            console.log( `start_x: ${start_x} start_y:${start_y}` );
+            //console.log( `start_x: ${start_x} start_y:${start_y}` );
             //shoot rays from current point
             let curr_pt = new THREE.Vector2( start_x, start_y );
             raycaster.setFromCamera( curr_pt, CAMERA );
@@ -304,20 +395,21 @@ function raycast_bounding_box() {
 
             //Add new intersected pts to array so we can highlight them
             //later 
-            intersects.map( pt => points_hit.push( pt.index ) ); 
+            intersects.map( pt => current_selected_points.push( pt.index ) ); 
         }        
     }
     
     //highlight all points hit 
-    change_point_color( points_hit, LABELED_POINT_COLOR );
+    change_point_color( current_selected_points, SELECTED_POINT_COLOR);
 
     //enlarge all points hit 
-    change_point_size( points_hit, DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+    change_point_size( current_selected_points, DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
 
     //set raycaster threshold back to normal
 	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE;
 
-    console.log( `Done box ray cast, points_hit length: ${points_hit.length}` );
+    console.log( `Done box ray cast, points_hit length: ${current_selected_points.length}` );
+    return current_selected_points;
 }
 
 function highlight_points_under_mouse() {
@@ -347,7 +439,7 @@ function highlight_points_under_mouse() {
 			//r0,g0,b0,r1,g1,b1,...rn,gn,bn.
 			//x0,y0,z0,x1,y1,z1,...xn,yn,zn.
 			//So point i's red value will be stored in color_buffer[i * 3]
-            change_point_color( intersected_pts, LABELED_POINT_COLOR );
+            change_point_color( intersected_pts, SELECTED_POINT_COLOR);
         }
     } else if ( intersected_pt_index !== null && intersected_pts.length > 0 )  {
 
@@ -373,4 +465,5 @@ function update() {
     highlight_points_under_mouse();
 }
 
-export { init, update, data_did_load };
+export { init, update, data_did_load, clear_all, clear_selected, 
+            label_selected, play_animation, stop_animation, forward, backward };

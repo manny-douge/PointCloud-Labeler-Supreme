@@ -9,7 +9,8 @@ const SCENE = INIT.SCENE;
 const CAMERA = INIT.CAMERA;
 const RENDERER = INIT.RENDERER;
 const CONTROLS = INIT.CONTROLS;
-const STATS = INIT.STATS;
+const STATS_FPS = INIT.STATS_FPS;
+const STATS_MEMORY = INIT.STATS_MEMORY;
 const GUI = PC_GUI.GUI; 
 
 
@@ -33,7 +34,8 @@ function tick() {
     RENDERER.render( SCENE, CAMERA ); 
 
     //Displays stats like fps and performance
-    STATS.update();
+    STATS_FPS.update();
+    STATS_MEMORY.update();
 }
 
 // Start app cycle
