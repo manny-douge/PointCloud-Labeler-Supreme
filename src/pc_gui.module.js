@@ -9,7 +9,7 @@ const GUI = new dat.GUI();
 
 //Create object so we can bind our params to
 let parameters = {
-    import_data: DataManager.import_data,
+    import_data: DataManager.open_file_browser,
     File: "No file currently loaded.",
     Mode: "VIEWING",
     Rows: "? of ?",
@@ -24,7 +24,8 @@ let parameters = {
 };
 
 // bind each button to a parameter from the above file
-// .listen indicates that changes to the parameter should propagate to UI
+// .listen indicates that changes to the parameter should be propagated
+// to the UI for a specific parameter.
 GUI.add( parameters, 'import_data' ).name("Import JSON");
 GUI.add( parameters, 'File' ).listen();
 GUI.add( parameters, 'Mode' ).name("Mode").listen();
@@ -45,10 +46,10 @@ animator_folder.add( parameters, 'Backward' ).name( "Backward 1 row" );
 var scene_utils_folder = GUI.addFolder( 'Scene Utilities' );
 scene_utils_folder.add( parameters, 'export_data' ).name( "Export JSON" );
 
-
+// Modulates text shown in the Mode section of the GUI based
+// on a whether or not they are labeling 
 function change_mode(is_labeling) {
-    let text = ( is_labeling ) ? "LABELING" : "VIEWING";
-    parameters['Mode'] = text;
+    parameters['Mode'] = ( is_labeling ) ? "LABELING" : "VIEWING";
 }
 
 export { GUI, parameters, change_mode };

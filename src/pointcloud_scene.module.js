@@ -30,10 +30,11 @@ let current_row = 0;
 let pointcloud_data = null; 
 let labeled_points = [];
 let current_selected_points = [];
+let pointcloud = null;
+let pointcloud_geometry = null;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
 let intersects, intersected_pt_index, intersected_pts = [];
-let points;
 let selection_box =  { startPoint: new THREE.Vector2(), endPoint: new THREE.Vector2()  }
 let helper = new SelectionHelper( selection_box, RENDERER, 'selectBox' );
 let animation_interval = null;
@@ -162,12 +163,12 @@ function render_pointcloud() {
 	//This section links attribues defined in the HTML Shaders 
 	//(vertexShader and fragmentShader elements) to variables
 	//that will be injected into the shader (as buffers) to be updated
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute( 'position', new THREE.Float32BufferAttribute 
+    pointcloud_geometry = new THREE.BufferGeometry();
+    pointcloud_geometry.setAttribute( 'position', new THREE.Float32BufferAttribute 
                                                      ( pointcloud_data, 3 ) );
-    geometry.setAttribute( 'customColor', new THREE.Float32BufferAttribute 
+    pointcloud_geometry.setAttribute( 'customColor', new THREE.Float32BufferAttribute 
                                                      ( color_buffer, 3 ) );
-    geometry.setAttribute( 'size', new THREE.Float32BufferAttribute 
+    pointcloud_geometry.setAttribute( 'size', new THREE.Float32BufferAttribute 
                                                      ( size_buffer, 1 ) );
 
 	//TODO: add shader and shadermaterial links for the boys
@@ -183,8 +184,8 @@ function render_pointcloud() {
 	} );
 
 	//Create pointcloud from explicit geometry and material
-    points = new THREE.Points( geometry, material );
-    SCENE.add( points );
+    pointcloud = new THREE.Points( pointcloud_geometry, material );
+    SCENE.add( pointcloud );
 
 	//X, Y, and Z axes lines to the scene to help with orientation
     SCENE.add( new THREE.AxesHelper( 20 ) );
@@ -196,35 +197,46 @@ function play_animation() {
     }, 100);
 }
 
+function cleanup_scene() {
+    SCENE.remove(pointcloud);
+   
+    // Must be called when geometry will be removed while app is running
+    if(pointcloud_geometry) {
+        pointcloud_geometry.dispose();
+        pointcloud_geometry = null;
+    }
+}
+// TODO: Fix memory leak, 7gb memory on anim play for 2 minutes
+// ??????
 function forward() {
-    //Delete old pointcloud 
-    SCENE.remove( points );
-    
+    cleanup_scene();
+
     //Move to next row of data set technically next pointcloud
-    current_row = (current_row + 1) % DataManager.pc_data.length;
+    current_row = (current_row + 1) % DataManager.imported_data.length;
 
     //Set new row to current pointcloud data 
-    pointcloud_data = DataManager.pc_data[current_row];
+    pointcloud_data = null;
+    pointcloud_data = DataManager.imported_data[current_row];
 
     render_pointcloud();
 
-    //highlight labeled points 
+    //highlight and enlarge labeled points 
     change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
     change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+
     //Update row GUI YIKES!
     //TODO: Definitely gotta do some major decoupling here 
-    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.pc_data.length}`; 
+    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.imported_data.length}`; 
 }
 
 function backward() {
-    //Delete old pointcloud 
-    SCENE.remove( points );
-    
-    //Move to next row of data set technically next pointcloud
+    cleanup_scene();
+
+    //Move to previous row index of data 
     current_row = (current_row == 0) ? current_row : current_row - 1;
 
     //Set new row to current pointcloud data 
-    pointcloud_data = DataManager.pc_data[current_row];
+    pointcloud_data = DataManager.imported_data[current_row];
 
     render_pointcloud();
 
@@ -234,7 +246,7 @@ function backward() {
 
     //Update row GUI YIKES!
     //TODO: Definitely gotta do some major decoupling here 
-    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.pc_data.length}`; 
+    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.imported_data.length}`; 
 }
 
 function stop_animation() {
@@ -248,11 +260,11 @@ function data_did_load() {
     //Abstract call here to pub sub model for other modules as well
     //No reason pcl_scene should be talking directly to GUI
     //update gui with file info 
-    PC_GUI.parameters.File = DataManager.pc_metadata.filename;
-    PC_GUI.parameters.Rows = `0 of ${DataManager.pc_data.length}`; 
+    PC_GUI.parameters.File = DataManager.imported_metadata.filename;
+    PC_GUI.parameters.Rows = `0 of ${DataManager.imported_data.length}`; 
 
     //Grab data from data importer 
-    pointcloud_data = DataManager.pc_data[current_row];    
+    pointcloud_data = DataManager.imported_data[current_row];    
 
     //make labeled point bins
     labeled_points = []
@@ -266,7 +278,7 @@ function data_did_load() {
 }
 
 function change_point_size( points_to_update, size ) {
-    let size_attr = points.geometry.getAttribute( 'size' );
+    let size_attr = pointcloud_geometry.getAttribute( 'size' );
 
     var points_intersected = [].concat( points_to_update || [] );
     for( let i = 0; i < points_intersected.length; i++ ) {
@@ -281,7 +293,7 @@ function change_point_size( points_to_update, size ) {
 }
 
 function change_point_color( points_to_update, color ) {
-    let color_attr = points.geometry.getAttribute( 'customColor' );
+    let color_attr = pointcloud_geometry.getAttribute( 'customColor' );
 
     var points_intersected = [].concat( points_to_update || [] );
     for( let i = 0; i < points_intersected.length; i++ ) {
@@ -391,7 +403,7 @@ function raycast_bounding_box() {
             //shoot rays from current point
             let curr_pt = new THREE.Vector2( start_x, start_y );
             raycaster.setFromCamera( curr_pt, CAMERA );
-            let intersects = raycaster.intersectObject( points );
+            let intersects = raycaster.intersectObject( pointcloud );
 
             //Add new intersected pts to array so we can highlight them
             //later 
@@ -414,7 +426,7 @@ function raycast_bounding_box() {
 
 function highlight_points_under_mouse() {
     raycaster.setFromCamera( mouse, CAMERA );
-    intersects = raycaster.intersectObject( points );
+    intersects = raycaster.intersectObject( pointcloud );
 
 	//Check if hit something 
     if( intersects.length > 0 ) {
