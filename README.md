@@ -58,7 +58,7 @@ PLS uses a number of open source projects to work properly:
 | OrbitControls | Camera tool provided separately as a small part of ThreeJS |
 | DAT.GUI | A lightweight graphical user interface for changing variables in JavaScript. |
 
-#Notes on file formats, importing, exporting
+# Notes on file formats, importing, exporting
 #### Importing data
 
 This project expects a JSON file for import. The format of the JSON file should be a list of lists, where each sublist within the overarching list describes a sequence of points (pointcloud).
