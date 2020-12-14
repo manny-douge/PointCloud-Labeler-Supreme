@@ -16,50 +16,80 @@ const DEFAULT_POINT_COLOR = new THREE.Color( 0x778899 );   //GRAY
 const LABELED_POINT_COLOR = new THREE.Color( 0xFF0000 );  //ORANGE
 const SELECTED_POINT_COLOR = new THREE.Color( 0xDFA602 ); //RED
 
-const SCENE_STATE = Object.assign( { 
-    VIEWING: "VIEWING",
-    LABELING: "LABELING",    //Orbit controls disasbled in labeling state 
-} );
+var IS_LABELING = false;
+var DATA_WAS_LOADED = false;
 
-let IS_LABELING = false;
-
-//TODO: CHOOSE ONE STATE VAR OR BOOLEAN FOR STATE
-let CURRENT_STATE = SCENE_STATE.VIEWING;
-let DATA_WAS_LOADED = false;
+//Current row of the dataset that we are viewing
 let current_row = 0;
+
+//Local reference to imported pointcloud data from dataimporter
 let pointcloud_data = null; 
+
+//Stores labeled points as list of lists
 let labeled_points = [];
-let current_selected_points = [];
+
+//Points currently selected by a bounding box drag
+let currently_selected_points = new Set();
+
+//Renderable object holding our points
 let pointcloud = null;
+
+//Geometry representing an effecient representation of the points 
 let pointcloud_geometry = null;
+
+
 let raycaster = new THREE.Raycaster();
-let mouse = new THREE.Vector2();
 let intersects, intersected_pt_index, intersected_pts = [];
-let selection_box =  { startPoint: new THREE.Vector2(), endPoint: new THREE.Vector2()  }
-let helper = new SelectionHelper( selection_box, RENDERER, 'selectBox' );
+
+let mouse = new THREE.Vector2();
+let selection_helper = new SelectionHelper( RENDERER, 'selectBox' );
 let animation_interval = null;
 
 function init() {
-    console.log( "Init PCL Scene" );
 
 	//How big are the points we're looking for ?
 	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE;
 
-	//Let there be light !1! 
+	//Let there be light 
     let light = new THREE.PointLight( 0xfffffff );
     light.position.set( 0, 250, 0 );
     SCENE.add( light );
 
+    //Setup events for shortcuts and raycaster for selections
     let canvas = document.getElementById( "RENDERER" );
     canvas.addEventListener( 'pointermove', onDocumentMouseMove, false );
-    canvas.addEventListener( 'pointermove', onBoundingBoxMove );
     canvas.addEventListener( 'pointerup', onBoundingBoxStop );
     document.addEventListener( 'keydown', onKeyDown);
 }
 
+//Entry point, function called from data importer once data is ready
+function data_did_load() {
+
+    //Abstract call here to pub sub model for scene and other modules as well
+    //No reason pcl_scene should be talking directly to update GUI
+    //update gui with file info 
+    PC_GUI.parameters.File = DataManager.imported_metadata.filename;
+    PC_GUI.parameters.Rows = `0 of ${DataManager.imported_data.length}`; 
+
+    //Grab data from data importer 
+    pointcloud_data = DataManager.imported_data[current_row];    
+
+    //make labeled point bins
+    labeled_points = []; 
+    DataManager.imported_data.map( row => labeled_points.push([]) );
+
+    build_pointcloud(); 
+	
+    //selection_box = new SelectionBox( CAMERA, points );
+	//begin update
+	DATA_WAS_LOADED = true;
+}
+
 function onKeyDown( event ) {
+
     //console.log( `Key: ${event.code}` );;
     if( event.code == "Space" ) {
+
         //If they press space, toggle between label and view mode
         IS_LABELING = !( IS_LABELING );
         PC_GUI.change_mode(IS_LABELING);
@@ -67,57 +97,40 @@ function onKeyDown( event ) {
         //In labeling mode, disable camera controls
         CONTROLS.enabled = !( IS_LABELING ); 
 
-        //In labeling mode, enable selectionhelper 
-        helper.enabled = IS_LABELING; 
-
+        //In labeling mode, enable selection box
+        selection_helper.enabled = IS_LABELING; 
     }
-}
-
-function onBoundingBoxMove( event ) {
-	//console.log( `BB move: ${selection_box.collection.length}` );
-	if( helper.isDown ) {
-		//for ( let i = 0; i < selection_box.collection.length; i ++ ) {
-		//	selection_box.collection[ i ].material.emissive.set( 0x000000 );
-		//}
-
-		selection_box.endPoint.set(
-			( event.clientX / window.innerWidth ) * 2 - 1,
-			- ( event.clientY / window.innerHeight ) * 2 + 1,
-			0.5 );
-
-		//const allSelected = selection_box.select();
-		//
-		//for ( let i = 0; i < allSelected.length; i ++ ) {
-		//	allSelected[ i ].material.emissive.set( 0xffffff );
-		//}
-	}
 }
 
 function onBoundingBoxStop( event ) {
 
     if( IS_LABELING ) {
-        console.log( `BB stop: 
-                st_point_helper: ${ JSON.stringify( helper.scene_start_point ) } 
-                end_point_helper: ${ JSON.stringify( helper.scene_end_point ) }` );
+
+        //console.log( `BB stop: 
+        //       st_point_helper: ${ JSON.stringify( selection_helper.scene_start_point ) } 
+        //        end_point_helper: ${ JSON.stringify( selection_helper.scene_end_point ) }` );
         raycast_bounding_box(); 
     }
 }
 
 function onDocumentMouseMove( event ) {
+
     event.preventDefault();
 
+    //Calculate + store mouse pos
     mouse.x = ( event.clientX/ window.innerWidth ) * 2 - 1;
     mouse.y = - ( event.clientY/ window.innerHeight) * 2 + 1;
 	//console.log( `MX: ${mouse.x} MY: ${mouse.y}` );
 }
 
-// Create the size buffer that will be linked to the "size" attribute
+// Create the color buffer that will be linked to the "customColor" attribute
 // declared in the HTML shader element, moving forward,
 // to update the size of any point we will access this buffer after we
 // set the geometries attribute, here we have 3 values per point.
 // R, G, B for 1 point. so we have RGB (3) * (1 point) pieces of data for each
 // point 
 function createColorBuffer() {
+
     let colorbuff = new Float32Array( pointcloud_data.length * 3 );
 
 	let pcl_len = pointcloud_data.length;
@@ -138,8 +151,9 @@ function createColorBuffer() {
 // Create the size buffer that will be linked to the "size" attribute
 // declared in the HTML shader element, moving forward,
 // to update the size of any point we will access this buffer after we
-// set the geometries attribute  
+// set the pointcloud_geometries attribute  
 function createSizeBuffer() {
+
     let sizebuff = new Float32Array( pointcloud_data.length );
 
 	let pcl_len = pointcloud_data.length;
@@ -149,8 +163,8 @@ function createSizeBuffer() {
     return sizebuff;
 }
 
-function render_pointcloud() {
-   	
+function build_pointcloud() {
+
 	//Basic empty circle sprite used for each point  
     let sprite = new THREE.TextureLoader().load( '../sprites/circle.png' );
 	
@@ -191,97 +205,85 @@ function render_pointcloud() {
     SCENE.add( new THREE.AxesHelper( 20 ) );
 }
 
+//Move forward one row of the data in the dataset and update scene 
+function render_row(new_row) {
+
+    if(new_row < 0 || new_row >= DataManager.imported_data.length) {
+        console.error(`Row ${new_row} out of bounds, cannot render`);
+        return;
+    }
+
+    cleanup_scene();
+
+    //Set new row to current pointcloud data 
+    pointcloud_data = DataManager.imported_data[new_row];
+
+    build_pointcloud();
+
+    //highlight and enlarge labeled points if any
+    change_point_color( labeled_points[new_row], LABELED_POINT_COLOR);
+    change_point_size( labeled_points[new_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+
+    //Update row GUI YIKES!
+    //TODO: Definitely gotta do some major decoupling here 
+    PC_GUI.parameters.Rows = `${new_row} of ${DataManager.imported_data.length}`; 
+}
+
+//Move to next row of data set technically next pointcloud
+function render_next_row() {
+
+    current_row = (current_row + 1) % DataManager.imported_data.length;
+    render_row(current_row);
+
+}
+
+//Move to next row of data set technically next pointcloud
+function render_prev_row() {
+
+    current_row = (current_row == 0) ? current_row : current_row - 1;
+    render_row(current_row)
+
+}
+
 function play_animation() {
+    stop_animation();
+
     animation_interval = setInterval( function() {
-        forward();
+        render_next_row();
     }, 100);
+
 }
 
 function cleanup_scene() {
+
     SCENE.remove(pointcloud);
    
     // Must be called when geometry will be removed while app is running
     if(pointcloud_geometry) {
+
         pointcloud_geometry.dispose();
         pointcloud_geometry = null;
+
     }
 }
-// TODO: Fix memory leak, 7gb memory on anim play for 2 minutes
-// ??????
-function forward() {
-    cleanup_scene();
 
-    //Move to next row of data set technically next pointcloud
-    current_row = (current_row + 1) % DataManager.imported_data.length;
-
-    //Set new row to current pointcloud data 
-    pointcloud_data = null;
-    pointcloud_data = DataManager.imported_data[current_row];
-
-    render_pointcloud();
-
-    //highlight and enlarge labeled points 
-    change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
-    change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
-
-    //Update row GUI YIKES!
-    //TODO: Definitely gotta do some major decoupling here 
-    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.imported_data.length}`; 
-}
-
-function backward() {
-    cleanup_scene();
-
-    //Move to previous row index of data 
-    current_row = (current_row == 0) ? current_row : current_row - 1;
-
-    //Set new row to current pointcloud data 
-    pointcloud_data = DataManager.imported_data[current_row];
-
-    render_pointcloud();
-
-    //highlight labeled points 
-    change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
-    change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
-
-    //Update row GUI YIKES!
-    //TODO: Definitely gotta do some major decoupling here 
-    PC_GUI.parameters.Rows = `${current_row} of ${DataManager.imported_data.length}`; 
-}
 
 function stop_animation() {
+
     if(animation_interval) {
         clearInterval(animation_interval);
     }
     animation_interval = null;
 }
 
-function data_did_load() {
-    //Abstract call here to pub sub model for other modules as well
-    //No reason pcl_scene should be talking directly to GUI
-    //update gui with file info 
-    PC_GUI.parameters.File = DataManager.imported_metadata.filename;
-    PC_GUI.parameters.Rows = `0 of ${DataManager.imported_data.length}`; 
-
-    //Grab data from data importer 
-    pointcloud_data = DataManager.imported_data[current_row];    
-
-    //make labeled point bins
-    labeled_points = []
-    pointcloud_data.map( row => labeled_points.push([]) );
-
-    render_pointcloud(); 
-	
-    //selection_box = new SelectionBox( CAMERA, points );
-	//begin update
-	DATA_WAS_LOADED = true;
-}
 
 function change_point_size( points_to_update, size ) {
+
     let size_attr = pointcloud_geometry.getAttribute( 'size' );
 
     var points_intersected = [].concat( points_to_update || [] );
     for( let i = 0; i < points_intersected.length; i++ ) {
+
         let pt_index = points_intersected[i];
 
         //Update size for point 
@@ -293,10 +295,12 @@ function change_point_size( points_to_update, size ) {
 }
 
 function change_point_color( points_to_update, color ) {
+
     let color_attr = pointcloud_geometry.getAttribute( 'customColor' );
 
     var points_intersected = [].concat( points_to_update || [] );
     for( let i = 0; i < points_intersected.length; i++ ) {
+
         let pt_index = points_intersected[i];
 
         let colorIdx = pt_index * 3;
@@ -316,6 +320,7 @@ function change_point_color( points_to_update, color ) {
 }
 
 function get_point_indices() {
+
     //create list of indices for all points 
     let pointcloud_data_indices = [];
     for(let i = 0; i < pointcloud_data.length; i++) {
@@ -326,45 +331,52 @@ function get_point_indices() {
 }
 
 function label_selected() {
+
     let labeled_copy = [];
+    
+    
     //make deep copy of currently selected 
-    current_selected_points.map( idx => labeled_copy.push( idx ) );
-    labeled_points[current_row] = labeled_copy;
+    //currently_selected_points.map( idx => labeled_copy.push( idx ) );
+    labeled_points[current_row] = Array.from(currently_selected_points);
 
     change_point_color( labeled_points[current_row], LABELED_POINT_COLOR);
     change_point_size( labeled_points[current_row], DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
 
     //reset current selection 
-    current_selected_points = [];
+    currently_selected_points = new Set(); 
 }
 
 function clear_all() {
-    labeled_points[current_row] = [];
+
     let all_indices = get_point_indices();
+
     change_point_color( all_indices, DEFAULT_POINT_COLOR );
     change_point_size( all_indices, DEFAULT_POINT_SIZE );
-    current_selected_points = [];
+
+    currently_selected_points = new Set();
+    labeled_points[current_row] = [];
 }
 
 function clear_selected() {
-    let selected_indices = current_selected_points;
-    change_point_color( selected_indices, DEFAULT_POINT_COLOR );
-    change_point_size( selected_indices, DEFAULT_POINT_SIZE );
-    current_selected_points= [];
+    let selected = Array.from(currently_selected_points);
+
+    change_point_color( selected, DEFAULT_POINT_COLOR );
+    change_point_size( selected, DEFAULT_POINT_SIZE );
+    currently_selected_points = new Set();
 }
 
 function raycast_bounding_box() {
+
     console.log( `Shooting bounding box rays` );
     
 	//just for bounding box, we want to catch all the points
     //we can, so set a big threshold for the mean time
 	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE * 2;
 
-    //Get bounding box dimensions from helper
-    let bb_start_pt = helper.scene_start_point;
-    let bb_end_pt   = helper.scene_end_point;
-    console.log( `Before correction: s_x:${ bb_start_pt.x} s_y: ${bb_start_pt.y}
-                    e_x:${ bb_end_pt.x} e_y: ${bb_end_pt.y}` );
+    //Get bounding box dimensions from selection_helper
+    let bb_start_pt = selection_helper.scene_start_point;
+    let bb_end_pt   = selection_helper.scene_end_point;
+
     //Before we can run the for loop shooting rays in the bounding box
     //we need to correct the bounding box based on where the start
     //points begin and end points end. depending on how someone
@@ -378,27 +390,30 @@ function raycast_bounding_box() {
 
     // handles 2nd quadrant
     if( bb_end_pt.x < bb_start_pt.x && bb_end_pt.y < bb_start_pt.y) { 
+
         bb_start_pt = new THREE.Vector2( bb_end_pt.x, bb_end_pt.y );
         bb_end_pt   = new THREE.Vector2( temp_start.x, temp_start.y );
+
     } else if( bb_end_pt.x < bb_start_pt.x ) { // handles 3rd quadrant
+
         bb_start_pt = new THREE.Vector2( bb_end_pt.x, bb_start_pt.y );
         bb_end_pt   = new THREE.Vector2( temp_start.x, bb_end_pt.y );
+
     } else if( bb_end_pt.y < bb_start_pt.y) { //Handles 4th quadrant
         bb_start_pt = new THREE.Vector2( bb_start_pt.x, bb_end_pt.y );
         bb_end_pt   = new THREE.Vector2( bb_end_pt.x, temp_start.y );
+
     } 
-    //console.log( `after correction: s_x:${ bb_start_pt.x} s_y: ${bb_start_pt.y}
-     //               e_x:${ bb_end_pt.x} e_y: ${bb_end_pt.y}` );
-    //array of indexes of the points hit for now
-    //current_selected_points 
     
-    //let start_x = bb_start_pt.x;
     let end_x   = bb_end_pt.x;
     let end_y   = bb_end_pt.y;
     let smp_rate = DEFAULT_POINT_SIZE; 
+
     //iterate over subset of bounding boxes and shoot rays
     for( let start_y = bb_start_pt.y; start_y < end_y; start_y += smp_rate) {
+
         for( let start_x = bb_start_pt.x; start_x < end_x; start_x += smp_rate) {
+
             //console.log( `start_x: ${start_x} start_y:${start_y}` );
             //shoot rays from current point
             let curr_pt = new THREE.Vector2( start_x, start_y );
@@ -407,32 +422,39 @@ function raycast_bounding_box() {
 
             //Add new intersected pts to array so we can highlight them
             //later 
-            intersects.map( pt => current_selected_points.push( pt.index ) ); 
+            intersects.map( pt => currently_selected_points.add( pt.index ) ); 
         }        
     }
-    
+
+    let selected = Array.from(currently_selected_points); 
+
     //highlight all points hit 
-    change_point_color( current_selected_points, SELECTED_POINT_COLOR);
+    change_point_color( selected, SELECTED_POINT_COLOR);
 
     //enlarge all points hit 
-    change_point_size( current_selected_points, DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
+    change_point_size( selected, DEFAULT_POINT_SIZE * LABELED_POINT_MUL );
 
     //set raycaster threshold back to normal
 	raycaster.params.Points.threshold = DEFAULT_POINT_SIZE;
 
-    console.log( `Done box ray cast, points_hit length: ${current_selected_points.length}` );
-    return current_selected_points;
+    console.log( `Done box ray cast, points selected total: ${selected.length}` );
+
+    return selected;
 }
 
 function highlight_points_under_mouse() {
+
     raycaster.setFromCamera( mouse, CAMERA );
     intersects = raycaster.intersectObject( pointcloud );
 
 	//Check if hit something 
     if( intersects.length > 0 ) {
+
         if ( intersected_pt_index != intersects[0].index ) {
+
 			//console.log( `Raycast hit ${intersects.length}` );
             if( intersected_pts.length > 0) {
+
                 //unhighlight old points 
                 change_point_color( intersected_pts, DEFAULT_POINT_COLOR ); 
                 change_point_size( intersected_pts, DEFAULT_POINT_SIZE ); 
@@ -459,17 +481,14 @@ function highlight_points_under_mouse() {
         //back to defualt  
         change_point_size( intersected_pts, DEFAULT_POINT_SIZE );
 
-        //Set color attribuets back to normal
         change_point_color( intersected_pts, DEFAULT_POINT_COLOR );
 
-        //intersected_pt_index = null;
         intersected_pts = [];
     }
 }
 
 function update() {
     //Dont update if data hasnt loaded yet
-    //or is in the middle labeling
 	if(DATA_WAS_LOADED == false ) {
 		return;
 	}
@@ -477,5 +496,5 @@ function update() {
     highlight_points_under_mouse();
 }
 
-export { init, update, data_did_load, clear_all, clear_selected, 
-            label_selected, play_animation, stop_animation, forward, backward };
+export { init, update, data_did_load, clear_all, clear_selected, labeled_points,
+            label_selected, play_animation, stop_animation, render_next_row, render_prev_row};

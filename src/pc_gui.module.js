@@ -1,8 +1,8 @@
 import * as INIT from './init.module.js';
 import * as DataManager from './data_manager.module.js';
 import { clear_all, clear_selected, label_selected, 
-        play_animation, stop_animation, forward,
-        backward } from './pointcloud_scene.module.js';
+        play_animation, stop_animation, render_next_row,
+        render_prev_row } from './pointcloud_scene.module.js';
 
 //SET UP GUI
 const GUI = new dat.GUI();
@@ -19,8 +19,8 @@ let parameters = {
     export_data: DataManager.export_data,
     Play: play_animation,
     Stop: stop_animation,
-    Forward: forward,
-    Backward: backward,
+    Forward: render_next_row,
+    Backward: render_prev_row,
 };
 
 // bind each button to a parameter from the above file

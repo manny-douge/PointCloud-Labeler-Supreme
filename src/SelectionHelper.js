@@ -4,7 +4,7 @@ import {
 
 var SelectionHelper = ( function () {
 
-	function SelectionHelper( selectionBox, renderer, cssClassName ) {
+	function SelectionHelper( renderer, cssClassName ) {
 
 		this.element = document.createElement( 'div' );
 		this.element.classList.add( cssClassName );
