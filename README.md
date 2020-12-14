@@ -10,6 +10,21 @@ PLS is a lightweight, browser-based, ThreeJS powered PointCloud Labeler.
   - Abililty to playback sequences.
   - Export of data in user-specified form as JSON.
 
+# Instructions/Controls:
+
+Controls for VIEWING mode:
+| Control| Purpose|
+| ------ | ------ |
+| Left-click | Rotate around scene when in VIEWING mode |
+| Right-click | Pan around scene when in VIEWING mode |
+| Space| Toggle between VIEWING mode and LABELING mode, camera controls are diasbled in LABELING mode|
+
+Controls for LABELING mode:
+| Control| Purpose|
+| ------ | ------ |
+| Left-click | Clicking and dragging creates a selection box which will select points once mouse is released.|
+| Right-click | Pan is disabled in LABELING mode. |
+| Space| Toggle between VIEWING mode and LABELING mode, camera controls are diasbled in LABELING mode|
 
 ### Todos
  - Add support for import of more standard pointcloud file formats.
