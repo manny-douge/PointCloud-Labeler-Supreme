@@ -1,2 +1,108 @@
-# PointCloud-Labeler-Supreme
-JavaScript based PointCloud Labeler for producing labeled observations for machine learning algorithms.
+# PointCloud Labeler Supreme
+![PC Labeler](usage.gif)
+
+PLS is a lightweight, browser-based, ThreeJS powered PointCloud Labeler.
+
+# Current Features:
+
+  - Import single pointcloud for labeling as JSON.
+  - Import multiple pointclouds into as a sequence.
+  - Abililty to playback sequences.
+  - Export of data in user-specified form as JSON.
+
+
+### Todos
+ - Add support for import of more standard pointcloud file formats.
+ - Add hooks for customized import and exports.
+
+
+### Libraries provided
+
+PLS uses a number of open source projects to work properly:
+
+| Project | Purpose |
+| ------ | ------ |
+| ThreeJS | Lightweight JavaScript 3D library|
+| OrbitControls | Camera tool provided separately as a small part of ThreeJS |
+| DAT.GUI | A lightweight graphical user interface for changing variables in JavaScript. |
+
+#### Running locally
+
+Pull down the repo and utilize your tool of choice to serve the repository.
+For convenience a one liner script is provided using Python3 to serve the directory.
+
+
+```sh
+chmod +x serve.sh
+./serve.sh
+```
+
+Verify the deployment by navigating to your server address in your preferred browser.
+
+```sh
+localhost:8000
+```
+
+#### Importing data
+
+This project expects a JSON file for import. The format of the JSON file should be a list of lists, where each sublist within the overarching list describes a sequence of points (pointcloud).
+
+Where each sequence of points is expected to be as follows:
+row 1 example: x1, y1, z1, x2, y2, z2, x3, y3, z3, xn, yn, zn, ...
+
+An example JSON is included below of a pointcloud sequence with 3 lists, each row denoting a different
+pointcloud, each pointcloud having only 4 points(with comments).
+
+```
+[   //Overarching list
+    [1, 42, 52, 231, 53, 12, 90, 21, 42, 900, 32, 151],         //First pointcloud
+    [90, 96, 30, 96,  3, 21, 48, 97, 66, 63, 41, 13],         //Second pointcloud
+    [56, 87, 38, 79, 74, 41, 31, 63, 96, 96, 67, 12],         //Third pointcloud
+] //End list of lists
+```
+3 attributes for each point (x,y,z) * 4 points in each cloud = 12 points per list
+Examples of varying sizes up to 30,000 points and varying numbers of rows is included in the 
+examples folder.
+
+| Example | Description |
+| ------ | ------ |
+| 10.json | ~28k points per row, for 10 rows (pointclouds) |
+| 20.json | ~28k points per row, for 20 rows (pointclouds) |
+| 30.json | ~28k points per row, for 30 rows (pointclouds) |
+
+#### Exporting data for unary classification
+
+Once labeling is complete, data can be exported with the "Export JSON" option in the GUI.
+For now, a JSON file is exported as a list of 0's and 1's.
+
+1 indicating that some object that you are labeling exists within this fame.
+0 indicating that object does not exist in this frame.
+
+This method of labeling is useful for unary classification (often called class modeling), where your learning primarily learning consists of a training set of objects only of this specific class
+to discover an accurate method to detect said class.
+
+Unary classification is most often used for outlier detection, anomaly detection, and novelty detection.
+
+#### Exporting data in your own way
+
+If you wish to export data in your own way whilst using this labeler.
+
+Within the DataManager module exists a function:
+```
+function package_data() { .... }
+```
+
+This can be overridden to export data existing with the scene using the labeled data exported from the pointcloud scene.
+
+
+| Example | Description |
+| ------ | ------ |
+| 10.json | ~28k points per row, for 10 rows (pointclouds) |
+| 20.json | ~28k points per row, for 20 rows (pointclouds) |
+| 30.json | ~28k points per row, for 30 rows (pointclouds) |
+
+License
+----
+
+MIT
+

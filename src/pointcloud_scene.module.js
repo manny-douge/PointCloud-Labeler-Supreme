@@ -64,6 +64,8 @@ function init() {
 
 //Entry point, function called from data importer once data is ready
 function data_did_load() {
+    cleanup_scene();
+    stop_animation();
 
     //Abstract call here to pub sub model for scene and other modules as well
     //No reason pcl_scene should be talking directly to update GUI
@@ -255,8 +257,10 @@ function play_animation() {
 }
 
 function cleanup_scene() {
-
-    SCENE.remove(pointcloud);
+    if(pointcloud) {
+        SCENE.remove(pointcloud);
+        pointcloud = null;
+    }
    
     // Must be called when geometry will be removed while app is running
     if(pointcloud_geometry) {
