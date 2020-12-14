@@ -101,6 +101,18 @@ This can be overridden to export data existing with the scene using the labeled 
 | 20.json | ~28k points per row, for 20 rows (pointclouds) |
 | 30.json | ~28k points per row, for 30 rows (pointclouds) |
 
+
+#### Utilities for creating pointclouds 
+
+As this project was intended to harvest points from a bag file produced on the ROS platform,
+from a LiDar sensor.
+
+Included in this repo are a few utilities to make that easier.
+
+| file | Description |
+| ------ | ------ |
+| bag2csv.py| Script that converts bag files to CSVs, with credit to Nick Speal and Marc Hanaheide |.
+| csvToJSON.py | Script that converts specifically the pointcloud points to the format readable for this application, with credit Dr. Dylan Schwesinger|  
 License
 ----
 

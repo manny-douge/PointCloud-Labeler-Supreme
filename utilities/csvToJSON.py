@@ -1,3 +1,5 @@
+# Author: Dr. Dylan Schwesinger
+# With amendments by: Emmanuel Douge
 import csv
 import json
 import struct
