@@ -113,6 +113,8 @@ Included in this repo are a few utilities to make that easier.
 | ------ | ------ |
 | bag2csv.py| Script that converts bag files to CSVs, with credit to Nick Speal and Marc Hanaheide |.
 | csvToJSON.py | Script that converts specifically the pointcloud points to the format readable for this application, with credit Dr. Dylan Schwesinger|  
+
+
 License
 ----
 
