@@ -10,6 +10,10 @@ PLS is a lightweight, browser-based, ThreeJS powered PointCloud Labeler.
   - Abililty to playback sequences.
   - Export of data in user-specified form as JSON.
 
+### Todos
+ - Add support for import of more standard pointcloud file formats.
+ - Add hooks for customized import and exports.
+
 # Instructions/Controls:
 
 Controls for VIEWING mode:
@@ -26,20 +30,8 @@ Controls for LABELING mode:
 | Right-click | Pan is disabled in LABELING mode. |
 | Space| Toggle between VIEWING mode and LABELING mode, camera controls are diasbled in LABELING mode|
 
-### Todos
- - Add support for import of more standard pointcloud file formats.
- - Add hooks for customized import and exports.
 
-
-### Libraries provided
-
-PLS uses a number of open source projects to work properly:
-
-| Project | Purpose |
-| ------ | ------ |
-| ThreeJS | Lightweight JavaScript 3D library|
-| OrbitControls | Camera tool provided separately as a small part of ThreeJS |
-| DAT.GUI | A lightweight graphical user interface for changing variables in JavaScript. |
+# Installation and libraries 
 
 #### Running locally
 
@@ -58,6 +50,15 @@ Verify the deployment by navigating to your server address in your preferred bro
 localhost:8000
 ```
 
+PLS uses a number of open source projects to work properly:
+
+| Project | Purpose |
+| ------ | ------ |
+| ThreeJS | Lightweight JavaScript 3D library|
+| OrbitControls | Camera tool provided separately as a small part of ThreeJS |
+| DAT.GUI | A lightweight graphical user interface for changing variables in JavaScript. |
+
+#Notes on file formats, importing, exporting
 #### Importing data
 
 This project expects a JSON file for import. The format of the JSON file should be a list of lists, where each sublist within the overarching list describes a sequence of points (pointcloud).
@@ -117,7 +118,7 @@ This can be overridden to export data existing with the scene using the labeled 
 | 30.json | ~28k points per row, for 30 rows (pointclouds) |
 
 
-#### Utilities for creating pointclouds 
+# Utilities for creating pointclouds from ROS
 
 As this project was intended to harvest points from a bag file produced on the ROS platform,
 from a LiDar sensor.
